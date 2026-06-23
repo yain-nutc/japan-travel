@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日本智慧旅遊行程規劃</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #C0392B;
+    --primary-light: #F9E9E7;
+    --secondary: #2C3E50;
+    --bg: #FAFAF8;
+    --card-bg: #FFFFFF;
+    --text: #2C2C2A;
+    --text-muted: #888780;
+    --border: rgba(0,0,0,0.1);
+  }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+  .hero {
+    background: linear-gradient(135deg, #C0392B 0%, #922B21 50%, #2C3E50 100%);
+    color: white; text-align: center; padding: 80px 20px 60px;
+    position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: '⛩'; font-size: 200px; position: absolute;
+    top: -40px; right: -20px; opacity: 0.08;
+  }
+  .hero h1 { font-size: clamp(28px, 5vw, 52px); font-weight: 700; margin-bottom: 12px; }
+  .hero p { font-size: 18px; opacity: 0.85; margin-bottom: 32px; }
+  .hero-tags { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .hero-tag {
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 16px; border-radius: 20px; font-size: 13px;
+  }
+
+  nav {
+    background: white; position: sticky; top: 0; z-index: 999;
+    border-bottom: 1px solid var(--border); padding: 0 20px;
+    display: flex; gap: 0; justify-content: center; overflow-x: auto;
+  }
+  .nav-btn {
+    padding: 16px 20px; font-size: 14px; font-weight: 500; cursor: pointer;
+    border: none; background: none; color: var(--text-muted);
+    border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s;
+  }
+  .nav-btn:hover { color: var(--primary); }
+  .nav-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  section { padding: 60px 20px; max-width: 1100px; margin: 0 auto; }
+  .section-title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .section-sub { color: var(--text-muted); margin-bottom: 36px; font-size: 15px; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+  .overview-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; text-align: center;
+  }
+  .overview-icon { font-size: 36px; margin-bottom: 12px; }
+  .overview-num { font-size: 32px; font-weight: 700; color: var(--primary); }
+  .overview-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+  .city-tabs { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+  .city-tab {
+    padding: 8px 20px; border-radius: 20px; border: 1.5px solid var(--border);
+    font-size: 14px; font-weight: 500; cursor: pointer; background: white; transition: all 0.2s;
+  }
+  .city-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+  .city-panel { display: none; }
+  .city-panel.active { display: block; }
+  .day-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; margin-bottom: 16px; overflow: hidden;
+  }
+  .day-header {
+    background: var(--primary); color: white;
+    padding: 14px 20px;
+  }
+  .day-num { font-size: 13px; opacity: 0.8; }
+  .day-title { font-size: 16px; font-weight: 600; }
+  .spot-row {
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .spot-row:last-child { border-bottom: none; }
+  .spot-time { font-size: 12px; color: var(--text-muted); min-width: 50px; padding-top: 2px; }
+  .spot-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); margin-top: 6px; flex-shrink: 0; }
+  .spot-name { font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+  .spot-desc { font-size: 13px; color: var(--text-muted); }
+  .spot-tag {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: var(--primary-light); color: var(--primary); margin-top: 5px;
+  }
+
+  #map { width: 100%; height: 480px; border-radius: 12px; border: 1px solid var(--border); }
+  .map-legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+  .prompt-log { display: flex; flex-direction: column; gap: 16px; }
+  .prompt-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .prompt-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    color: var(--primary); text-transform: uppercase; margin-bottom: 8px;
+  }
+  .prompt-text {
+    background: #F4F4F2; border-radius: 8px; padding: 12px 14px;
+    font-size: 13px; font-family: monospace; color: #444; line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .prompt-result { font-size: 14px; color: var(--text-muted); }
+
+  .tools-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .tool-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .tool-icon { font-size: 28px; margin-bottom: 10px; }
+  .tool-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .tool-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+  .tool-badge {
+    display: inline-block; margin-top: 10px; font-size: 11px;
+    padding: 3px 10px; border-radius: 10px;
+    background: #EAF3DE; color: #3B6D11;
+  }
+
+  .tips-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .tip-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .tip-emoji { font-size: 28px; margin-bottom: 10px; }
+  .tip-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .tip-text { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+  footer {
+    background: var(--secondary); color: rgba(255,255,255,0.7);
+    text-align: center; padding: 32px 20px; font-size: 13px;
+  }
+  footer strong { color: white; }
+
+  .leaflet-popup-content-wrapper { border-radius: 10px !important; }
+  .popup-inner h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #222; }
+  .popup-inner p { font-size: 12px; color: #666; margin-bottom: 6px; }
+  .popup-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 8px;
+    background: #F9E9E7; color: #C0392B; display: inline-block;
+  }
+
+  @media(max-width:600px){
+    .hero { padding: 50px 16px 40px; }
+    section { padding: 40px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>🗾 日本智慧旅遊行程規劃</h1>
+  <p>AI 協助規劃的東京・大阪・京都五日遊</p>
+  <div class="hero-tags">
+    <span class="hero-tag">📍 3 大城市</span>
+    <span class="hero-tag">🗓 5 天 4 夜</span>
+    <span class="hero-tag">🤖 AI 智慧規劃</span>
+    <span class="hero-tag">🗺 互動地圖</span>
+  </div>
+</div>
+
+<nav>
+  <button class="nav-btn active" onclick="scrollToSec('overview')">總覽</button>
+  <button class="nav-btn" onclick="scrollToSec('itinerary')">行程</button>
+  <button class="nav-btn" onclick="scrollToSec('map')">地圖</button>
+  <button class="nav-btn" onclick="scrollToSec('tips')">旅遊提示</button>
+  <button class="nav-btn" onclick="scrollToSec('ai-log')">AI 紀錄</button>
+</nav>
+
+<div id="overview-section">
+<section>
+  <p class="section-title">旅遊總覽</p>
+  <p class="section-sub">一趟融合傳統與現代的日本深度之旅</p>
+  <div class="overview-grid">
+    <div class="overview-card"><div class="overview-icon">🗓</div><div class="overview-num">5</div><div class="overview-label">天數</div></div>
+    <div class="overview-card"><div class="overview-icon">🏙</div><div class="overview-num">3</div><div class="overview-label">城市</div></div>
+    <div class="overview-card"><div class="overview-icon">📍</div><div class="overview-num">14</div><div class="overview-label">景點</div></div>
+    <div class="overview-card"><div class="overview-icon">🍜</div><div class="overview-num">8</div><div class="overview-label">推薦美食</div></div>
+    <div class="overview-card"><div class="overview-icon">🚄</div><div class="overview-num">2</div><div class="overview-label">新幹線段</div></div>
+  </div>
+</section>
+</div>
+<hr class="divider">
+
+<div id="itinerary-section">
+<section>
+  <p class="section-title">五日行程</p>
+  <p class="section-sub">由 AI 智慧規劃，依城市分區、步行動線最佳化</p>
+
+  <div class="city-tabs">
+    <button class="city-tab active" onclick="showCity('tokyo', this)">🗼 東京（Day 1–2）</button>
+    <button class="city-tab" onclick="showCity('osaka', this)">🏯 大阪（Day 3–4）</button>
+    <button class="city-tab" onclick="showCity('kyoto', this)">⛩ 京都（Day 5）</button>
+  </div>
+
+  <div id="city-tokyo" class="city-panel active">
+    <div class="day-card">
+      <div class="day-header"><div class="day-num">Day 1</div><div class="day-title">抵達東京・淺草・晴空塔</div></div>
+      <div>
+        <div class="spot-row"><div class="spot-time">09:00</div><div class="spot-dot"></div><div><div class="spot-name">成田/羽田機場入境</div><div class="spot-desc">購買 Suica 交通卡、SIM 卡，搭乘成田特快 N'EX 進市區</div><span class="spot-tag">交通</span></div></div>
+        <div class="spot-row"><div class="spot-time">12:00</div><div class="spot-dot"></div><div><div class="spot-name">淺草寺</div><div class="spot-desc">東京最古老寺廟，雷門大燈籠必拍，仲見世通購物街</div><span class="spot-tag">歷史文化</span></div></div>
+        <div class="spot-row"><div class="spot-time">14:30</div><div class="spot-dot"></div><div><div class="spot-name">東京晴空塔</div><div class="spot-desc">634 公尺高、世界第二高塔，天空廊道俯瞰東京灣</div><span class="spot-tag">地標</span></div></div>
+        <div class="spot-row"><div class="spot-time">18:00</div><div class="spot-dot"></div><div><div class="spot-name">晚餐：淺草今半壽喜燒</div><div class="spot-desc">百年老店，頂級和牛，需提前預約</div><span class="spot-tag">美食</span></div></div>
+      </div>
+    </div>
+    <div class="day-card">
+      <div class="day-header"><div class="day-num">Day 2</div><div class="day-title">澀谷・原宿・新宿</div></div>
+      <div>
+        <div class="spot-row"><div class="spot-time">09:00</div><div class="spot-dot"></div><div><div class="spot-name">明治神宮</div><div class="spot-desc">原宿站旁的森林神社，日本最多遊客參拜的神社之一</div><span class="spot-tag">歷史文化</span></div></div>
+        <div class="spot-row"><div class="spot-time">11:00</div><div class="spot-dot"></div><div><div class="spot-name">竹下通り・表參道</div><div class="spot-desc">日本潮流文化發源地，可逛小店、crepe、扭蛋</div><span class="spot-tag">購物</span></div></div>
+        <div class="spot-row"><div class="spot-time">15:00</div><div class="spot-dot"></div><div><div class="spot-name">澀谷十字路口</div><div class="spot-desc">全球最繁忙斑馬線，Scramble Square 展望台俯瞰全景</div><span class="spot-tag">地標</span></div></div>
+        <div class="spot-row"><div class="spot-time">20:00</div><div class="spot-dot"></div><div><div class="spot-name">新宿歌舞伎町・居酒屋</div><div class="spot-desc">日本最大娛樂區，居酒屋體驗日本下班文化</div><span class="spot-tag">美食體驗</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="city-osaka" class="city-panel">
+    <div class="day-card">
+      <div class="day-header"><div class="day-num">Day 3</div><div class="day-title">搭新幹線抵大阪・大阪城・道頓堀</div></div>
+      <div>
+        <div class="spot-row"><div class="spot-time">07:30</div><div class="spot-dot"></div><div><div class="spot-name">東京→大阪 新幹線のぞみ</div><div class="spot-desc">約 2.5 小時，沿途可欣賞富士山，建議訂 E 排靠窗座位</div><span class="spot-tag">交通</span></div></div>
+        <div class="spot-row"><div class="spot-time">11:00</div><div class="spot-dot"></div><div><div class="spot-name">大阪城公園</div><div class="spot-desc">豐臣秀吉建造的日本名城，護城河春季盛開櫻花</div><span class="spot-tag">歷史文化</span></div></div>
+        <div class="spot-row"><div class="spot-time">15:00</div><div class="spot-dot"></div><div><div class="spot-name">道頓堀・心齋橋</div><div class="spot-desc">必試章魚燒、大阪燒，著名固力果跑者廣告看板</div><span class="spot-tag">美食 / 購物</span></div></div>
+        <div class="spot-row"><div class="spot-time">19:00</div><div class="spot-dot"></div><div><div class="spot-name">黑門市場晚餐</div><div class="spot-desc">大阪廚房，新鮮刺身、海膽、蟹腳當場烹調</div><span class="spot-tag">美食</span></div></div>
+      </div>
+    </div>
+    <div class="day-card">
+      <div class="day-header"><div class="day-num">Day 4</div><div class="day-title">環球影城・難波</div></div>
+      <div>
+        <div class="spot-row"><div class="spot-time">09:00</div><div class="spot-dot"></div><div><div class="spot-name">環球影城 USJ</div><div class="spot-desc">哈利波特魔法世界、任天堂世界，建議購買 Express Pass</div><span class="spot-tag">娛樂</span></div></div>
+        <div class="spot-row"><div class="spot-time">17:00</div><div class="spot-dot"></div><div><div class="spot-name">難波・美國村</div><div class="spot-desc">大阪年輕人文化聚集地，復古服飾、日本潮牌</div><span class="spot-tag">購物</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="city-kyoto" class="city-panel">
+    <div class="day-card">
+      <div class="day-header"><div class="day-num">Day 5</div><div class="day-title">京都一日遊・返程</div></div>
+      <div>
+        <div class="spot-row"><div class="spot-time">08:00</div><div class="spot-dot"></div><div><div class="spot-name">伏見稻荷大社</div><div class="spot-desc">千本鳥居，日本最具代表性的景色，清晨前往避開人潮</div><span class="spot-tag">歷史文化</span></div></div>
+        <div class="spot-row"><div class="spot-time">10:30</div><div class="spot-dot"></div><div><div class="spot-name">嵐山竹林・渡月橋</div><div class="spot-desc">翠綠竹林步道，嵐山溪流景色，可騎腳踏車遊覽</div><span class="spot-tag">自然景觀</span></div></div>
+        <div class="spot-row"><div class="spot-time">13:00</div><div class="spot-dot"></div><div><div class="spot-name">錦市場午餐</div><div class="spot-desc">京都的廚房，豆腐、漬物、湯葉等京都特色食材</div><span class="spot-tag">美食</span></div></div>
+        <div class="spot-row"><div class="spot-time">15:00</div><div class="spot-dot"></div><div><div class="spot-name">金閣寺</div><div class="spot-desc">三層金箔貼覆的世界遺產，倒影在鏡湖池上令人難忘</div><span class="spot-tag">世界遺產</span></div></div>
+        <div class="spot-row"><div class="spot-time">18:00</div><div class="spot-dot"></div><div><div class="spot-name">返回大阪・搭機回台</div><div class="spot-desc">大阪關西空港出發，約 3 小時飛回台灣</div><span class="spot-tag">交通</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<hr class="divider">
+
+<div id="map-section">
+<section>
+  <p class="section-title">互動景點地圖</p>
+  <p class="section-sub">點擊地圖標記查看景點資訊，可縮放切換城市</p>
+  <div id="map"></div>
+  <div class="map-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#C0392B"></div>東京景點</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#E67E22"></div>大阪景點</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#27AE60"></div>京都景點</div>
+  </div>
+</section>
+</div>
+<hr class="divider">
+
+<div id="tips-section">
+<section>
+  <p class="section-title">旅遊實用小提示</p>
+  <p class="section-sub">AI 整理的日本旅遊必知資訊</p>
+  <div class="tips-grid">
+    <div class="tip-card"><div class="tip-emoji">💳</div><div class="tip-title">Suica 交通卡</div><div class="tip-text">可在機場自動售票機購買，適用地鐵、JR、公車甚至便利商店付款，強烈建議辦理。</div></div>
+    <div class="tip-card"><div class="tip-emoji">📶</div><div class="tip-title">網路 SIM 卡</div><div class="tip-text">推薦在台灣預購日本 SIM（IIJmio 或 au），抵達後直接插入使用，不需在機場排隊。</div></div>
+    <div class="tip-card"><div class="tip-emoji">🚄</div><div class="tip-title">JR Pass 購買</div><div class="tip-text">搭乘 2 次以上新幹線可考慮購買，台灣出發前購買更划算，抵達後兌換即可使用。</div></div>
+    <div class="tip-card"><div class="tip-emoji">🍱</div><div class="tip-title">便利商店文化</div><div class="tip-text">7-Eleven、FamilyMart、Lawson 的熱食、飯糰品質極高，是省錢又好吃的早餐選擇。</div></div>
+    <div class="tip-card"><div class="tip-emoji">⛩</div><div class="tip-title">參拜禮儀</div><div class="tip-text">神社入口需洗手（手水舍），殿前鞠躬兩次、拍手兩次、再鞠躬一次，勿大聲喧嘩。</div></div>
+    <div class="tip-card"><div class="tip-emoji">🗑</div><div class="tip-title">垃圾桶很少</div><div class="tip-text">日本街道幾乎沒有垃圾桶，請自備小塑膠袋裝垃圾，帶回飯店或便利商店丟棄。</div></div>
+  </div>
+</section>
+</div>
+<hr class="divider">
+
+<div id="ai-log-section">
+<section>
+  <p class="section-title">AI 使用紀錄</p>
+  <p class="section-sub">本作品整合 3 種 AI 能力，以下為主要 Prompt 與使用過程</p>
+
+  <div class="tools-grid" style="margin-bottom:36px">
+    <div class="tool-card"><div class="tool-icon">🤖</div><div class="tool-name">AI 文字生成</div><div class="tool-desc">使用 Claude AI 規劃五日行程、撰寫景點介紹與旅遊小提示，並針對輸出進行多次修改與迭代。</div><span class="tool-badge">W1-W3 對話式 AI</span></div>
+    <div class="tool-card"><div class="tool-icon">🗺</div><div class="tool-name">AI 地圖視覺化</div><div class="tool-desc">運用 AI 協助整理景點經緯度資料，搭配 Leaflet.js 製作互動地圖，實現資料視覺化展示。</div><span class="tool-badge">W11-W12 互動地圖</span></div>
+    <div class="tool-card"><div class="tool-icon">💻</div><div class="tool-name">Codex / AI Agent</div><div class="tool-desc">透過 AI 協助撰寫 HTML、CSS、JavaScript 程式碼，完成網頁架構設計與互動功能實作。</div><span class="tool-badge">W13-W14 程式製作</span></div>
+  </div>
+
+  <div class="prompt-log">
+    <div class="prompt-card">
+      <div class="prompt-label">Prompt 1｜行程規劃</div>
+      <div class="prompt-text">請幫我規劃一個 5 天 4 夜的日本旅遊行程，包含東京、大阪、京都三個城市。目標是兼顧歷史文化景點與現代娛樂，每天安排 3-4 個景點，並附上建議時間與簡短說明。</div>
+      <div class="prompt-result">✅ AI 產出完整分城市行程，包含時間安排與景點描述，再手動調整部分景點順序以符合實際動線。</div>
+    </div>
+    <div class="prompt-card">
+      <div class="prompt-label">Prompt 2｜景點座標</div>
+      <div class="prompt-text">請列出以下景點的 GPS 座標（緯度、經度）：淺草寺、東京晴空塔、明治神宮、澀谷十字路口、大阪城、道頓堀、環球影城、伏見稻荷大社、嵐山竹林、金閣寺</div>
+      <div class="prompt-result">✅ AI 提供各景點座標，用於 Leaflet.js 地圖標記，並透過 Google Maps 交叉驗證座標正確性。</div>
+    </div>
+    <div class="prompt-card">
+      <div class="prompt-label">Prompt 3｜網頁程式碼</div>
+      <div class="prompt-text">請幫我撰寫一個旅遊展示網頁的 HTML/CSS/JavaScript，需包含：互動地圖（Leaflet.js）、行程卡片、旅遊小提示區塊，設計風格偏向日本風、簡潔清爽。</div>
+      <div class="prompt-result">✅ AI 生成完整網頁骨架，迭代 3 次後調整配色（加入紅色日本元素）、修正地圖標記互動，完成本頁面。</div>
+    </div>
+  </div>
+</section>
+</div>
+
+<footer>
+  <strong>日本智慧旅遊行程規劃</strong><br>
+  智慧生活科技應用 期末報告｜AI 協作製作<br>
+  資料來源：AI 生成內容 + Google Maps 景點資料驗證
+</footer>
+
+<script>
+function showCity(city, btn) {
+  document.querySelectorAll('.city-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.city-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('city-' + city).classList.add('active');
+  btn.classList.add('active');
+}
+
+function scrollToSec(id) {
+  document.getElementById(id + '-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+window.addEventListener('load', function() {
+  var map = L.map('map').setView([35.2, 136.5], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  function mkIcon(color) {
+    return L.divIcon({
+      html: '<div style="width:14px;height:14px;border-radius:50%;background:' + color + ';border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
+      iconSize: [14, 14], className: ''
+    });
+  }
+
+  var spots = [
+    { lat: 35.7148, lng: 139.7967, name: '淺草寺', desc: '東京最古老寺廟，雷門大燈籠必拍', city: '東京', color: '#C0392B' },
+    { lat: 35.7101, lng: 139.8107, name: '東京晴空塔', desc: '世界第二高塔，634公尺', city: '東京', color: '#C0392B' },
+    { lat: 35.6763, lng: 139.6993, name: '明治神宮', desc: '原宿旁的森林神社', city: '東京', color: '#C0392B' },
+    { lat: 35.6595, lng: 139.7004, name: '澀谷十字路口', desc: '全球最繁忙斑馬線', city: '東京', color: '#C0392B' },
+    { lat: 35.6896, lng: 139.7006, name: '新宿', desc: '東京最大娛樂區', city: '東京', color: '#C0392B' },
+    { lat: 34.6873, lng: 135.5262, name: '大阪城', desc: '豐臣秀吉建造的名城', city: '大阪', color: '#E67E22' },
+    { lat: 34.6687, lng: 135.5007, name: '道頓堀', desc: '章魚燒、大阪燒必試', city: '大阪', color: '#E67E22' },
+    { lat: 34.6537, lng: 135.5003, name: '環球影城', desc: '哈利波特、任天堂世界', city: '大阪', color: '#E67E22' },
+    { lat: 34.6652, lng: 135.5049, name: '心齋橋', desc: '大阪主要購物街', city: '大阪', color: '#E67E22' },
+    { lat: 34.9671, lng: 135.7727, name: '伏見稻荷大社', desc: '千本鳥居，日本代表景色', city: '京都', color: '#27AE60' },
+    { lat: 35.0095, lng: 135.6761, name: '嵐山竹林', desc: '翠綠竹林步道', city: '京都', color: '#27AE60' },
+    { lat: 35.0394, lng: 135.7292, name: '金閣寺', desc: '世界遺產，金箔貼覆佛寺', city: '京都', color: '#27AE60' },
+    { lat: 35.0116, lng: 135.6761, name: '渡月橋', desc: '嵐山地標橋樑', city: '京都', color: '#27AE60' },
+    { lat: 35.6585, lng: 139.7013, name: '代代木公園', desc: '東京都心大公園', city: '東京', color: '#C0392B' }
+  ];
+
+  spots.forEach(function(s) {
+    L.marker([s.lat, s.lng], { icon: mkIcon(s.color) })
+      .addTo(map)
+      .bindPopup('<div class="popup-inner"><h3>' + s.name + '</h3><p>' + s.desc + '</p><span class="popup-tag">' + s.city + '</span></div>');
+  });
+});
+</script>
+</body>
+</html>
